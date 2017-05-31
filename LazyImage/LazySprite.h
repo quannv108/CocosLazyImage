@@ -34,7 +34,7 @@ protected:
     
 public:
     static LazySprite* create(cocos2d::Sprite *holder, const cocos2d::Size& s);
-    void setImageURL(const std::string& url);
+    void setImageURL(const std::string& url,double cacheDuration = 21600);
     void reset();
 protected:
     virtual bool init(cocos2d::Sprite *holder, const cocos2d::Size& s);
