@@ -82,7 +82,7 @@ bool LazyImageLoader::init()
     _downloader->onTaskError = std::bind(&LazyImageLoader::onDownloadTaskFailed, this,  std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
     
     
-    fileList = FileUtils::getInstance()->getValueMapFromFile(_writablePath + _writePathPrefix + kCacheFile);
+    _cacheInfoFileValue = FileUtils::getInstance()->getValueMapFromFile(_writablePath + _writePathPrefix + kCacheFile);
     
     deleteExpiredImages();
     
@@ -96,7 +96,7 @@ void LazyImageLoader::deleteExpiredImages()
     auto currentTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     cocos2d::ValueMap tempMap;
     
-    for (auto& kv : fileList) {
+    for (auto& kv : _cacheInfoFileValue) {
         
         double cacheDuration = kv.second.asDouble();
         if(cacheDuration > -1 &&  cacheDuration < ((double)currentTime))
@@ -109,14 +109,13 @@ void LazyImageLoader::deleteExpiredImages()
         }
     }
     
-    fileList = tempMap;
-    FileUtils::getInstance()->writeValueMapToFile(fileList, _writablePath + _writePathPrefix + kCacheFile);
+    _cacheInfoFileValue = tempMap;
+    FileUtils::getInstance()->writeValueMapToFile(_cacheInfoFileValue, _writablePath + _writePathPrefix + kCacheFile);
 }
 
 
 std::string LazyImageLoader::pathForLoadedImage(const std::string &url)
 {
-    
     //check already have
     std::string filePath = convertURLToFilePath(url);
     if(filePath.size() == 0){
@@ -239,8 +238,8 @@ std::vector<std::string> LazyImageLoader::split(const std::string& str, char del
 void LazyImageLoader::saveCacheInfo(const std::string &url,double cacheDuration)
 {
     auto currentTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    fileList[url] = cacheDuration >= 0 ? (double)currentTime + cacheDuration : -1;
-    FileUtils::getInstance()->writeValueMapToFile(fileList, _writablePath + _writePathPrefix + kCacheFile);
+    _cacheInfoFileValue[url] = cacheDuration >= 0 ? (double)currentTime + cacheDuration : -1;
+    FileUtils::getInstance()->writeValueMapToFile(_cacheInfoFileValue, _writablePath + _writePathPrefix + kCacheFile);
     CCLOG("LazyImageLoader:: cache %s done for %f seconds", url.c_str(), cacheDuration);
 }
 
@@ -262,7 +261,6 @@ bool LazyImageLoader::loadImage(const std::string &url,double cacheDuration)
     
     std::string iden = fullPath;
     ImageLoadInfo loadInfo = {fullPath,cacheDuration};
-    
     
     auto ite = std::find_if(_loadersIdentifier.begin(), _loadersIdentifier.end(), [loadInfo](const ImageLoadInfo& m) -> bool {
         return loadInfo.url.compare(m.url) == 0;

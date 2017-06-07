@@ -84,6 +84,8 @@ void LazySprite::setImageURL(const std::string &url,double cacheDuration)
         Sprite *s = Sprite::create(path);
         setSpriteFrame(s->getSpriteFrame());
         resetScaleBySize(s->getBoundingBox().size);
+        //increase cache time for this image
+        LazyImageLoader::getInstance()->saveCacheInfo(url, cacheDuration);
         return;
     }
     

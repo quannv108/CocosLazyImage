@@ -61,6 +61,8 @@ public:
     
 public:
     /** load new image
+     *  @params url: url of image to load
+     *  @params cacheDuration expired time to delete this image, in seconds, default is 6 hours
      *  @return true if it will load in lazy
      *  @return false if no loader will be init
      */
@@ -72,8 +74,8 @@ public:
     
     void deleteExpiredImages();
     void saveCacheInfo(const std::string &url,double cacheDuration);
-private:
     
+private:
     std::vector<ImageLoadInfo> _loadersIdentifier;
     std::string _writablePath;
     std::string _writePathPrefix;
@@ -90,10 +92,8 @@ private:
     
 private:
     void createDirectoryForPath(const std::string& path);
-    cocos2d::ValueMap fileList;
-    
-    
-    
+    cocos2d::ValueMap _cacheInfoFileValue;
+
 };
 
 #endif  /* defined(__Funny__LazyImageLoader__) */
