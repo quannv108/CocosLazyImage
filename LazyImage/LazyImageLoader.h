@@ -40,6 +40,14 @@ public:
     CC_SYNTHESIZE(cocos2d::Texture2D *, _texture, Texture);
 };
 
+typedef struct ImageLoadInfo {
+    
+    std::string url;
+    double cacheDuration;
+    
+} ImageLoadInfo;
+
+
 class LazyImageLoader  {
 protected:
     LazyImageLoader();
@@ -56,19 +64,22 @@ public:
      *  @return true if it will load in lazy
      *  @return false if no loader will be init
      */
-    bool loadImage(const std::string& url);
+    bool loadImage(const std::string& url,double cacheDuration = 21600);
     std::string pathForLoadedImage(const std::string& url);
     std::string convertURLToFilePath(const std::string& url);
     bool replace(std::string& str, const std::string& from, const std::string& to);
     std::vector<std::string> split(const std::string& str, char delimiter);
     
+    void deleteExpiredImages();
+    void saveCacheInfo(const std::string &url,double cacheDuration);
 private:
-    std::vector<std::string> _loadersIdentifier;
+    
+    std::vector<ImageLoadInfo> _loadersIdentifier;
     std::string _writablePath;
     std::string _writePathPrefix;
     bool _useOwnFolder;
     cocos2d::network::Downloader *_downloader;
-
+    
     void onDownloadTaskDone(const cocos2d::network::DownloadTask& task);
     void onDownloadTaskFailed(const cocos2d::network::DownloadTask& task,
                               int errorCode,
@@ -79,6 +90,10 @@ private:
     
 private:
     void createDirectoryForPath(const std::string& path);
+    cocos2d::ValueMap fileList;
+    
+    
+    
 };
 
 #endif  /* defined(__Funny__LazyImageLoader__) */

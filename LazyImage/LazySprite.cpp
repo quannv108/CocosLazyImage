@@ -70,7 +70,7 @@ bool LazySprite::init(Sprite *holder, const cocos2d::Size& s)
     return true;
 }
 
-void LazySprite::setImageURL(const std::string &url)
+void LazySprite::setImageURL(const std::string &url,double cacheDuration)
 {
     CCLOG("LazySprite::setImageURL: %s", url.c_str());
     if(url == _imgURL){

@@ -27,6 +27,7 @@
 #include <algorithm>
 
 #define kCacheDir   "LazyImageCache/"
+#define kCacheFile   "imageCacheInfo.txt"
 
 USING_NS_CC;
 
@@ -80,13 +81,42 @@ bool LazyImageLoader::init()
     _downloader->onFileTaskSuccess = CC_CALLBACK_1(LazyImageLoader::onDownloadTaskDone, this);
     _downloader->onTaskError = std::bind(&LazyImageLoader::onDownloadTaskFailed, this,  std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4);
     
+    
+    fileList = FileUtils::getInstance()->getValueMapFromFile(_writablePath + _writePathPrefix + kCacheFile);
+    
+    deleteExpiredImages();
+    
     return true;
 }
 
 #pragma mark - utils
 
+void LazyImageLoader::deleteExpiredImages()
+{
+    auto currentTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    cocos2d::ValueMap tempMap;
+    
+    for (auto& kv : fileList) {
+        
+        double cacheDuration = kv.second.asDouble();
+        if(cacheDuration > -1 &&  cacheDuration < ((double)currentTime))
+        {
+            FileUtils::getInstance()->removeFile(_writablePath + _writePathPrefix + convertURLToFilePath(kv.first));
+        }
+        else
+        {
+            tempMap[kv.first] = kv.second;
+        }
+    }
+    
+    fileList = tempMap;
+    FileUtils::getInstance()->writeValueMapToFile(fileList, _writablePath + _writePathPrefix + kCacheFile);
+}
+
+
 std::string LazyImageLoader::pathForLoadedImage(const std::string &url)
 {
+    
     //check already have
     std::string filePath = convertURLToFilePath(url);
     if(filePath.size() == 0){
@@ -130,6 +160,7 @@ std::string LazyImageLoader::convertURLToFilePath(const std::string &url)
     replace(output, "https://", "");
     replace(output, "http://", "");
     replace(output, "www.", "");
+    replace(output, "blob:", "");
     
     //change ?, &
     std::replace(output.begin(), output.end(), '?', '_');
@@ -205,22 +236,37 @@ std::vector<std::string> LazyImageLoader::split(const std::string& str, char del
 
 #pragma mark - downloader
 
-bool LazyImageLoader::loadImage(const std::string &url)
+void LazyImageLoader::saveCacheInfo(const std::string &url,double cacheDuration)
 {
-    //check already have
+    auto currentTime = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    fileList[url] = cacheDuration >= 0 ? (double)currentTime + cacheDuration : -1;
+    FileUtils::getInstance()->writeValueMapToFile(fileList, _writablePath + _writePathPrefix + kCacheFile);
+    CCLOG("LazyImageLoader:: cache %s done for %f seconds", url.c_str(), cacheDuration);
+}
+
+bool LazyImageLoader::loadImage(const std::string &url,double cacheDuration)
+{
+    
     std::string filePath = convertURLToFilePath(url);
     if(filePath.size() == 0){
         return false;
     }
     
+    //check already have
     std::string fullPath = _writablePath + _writePathPrefix + filePath;
     if(FileUtils::getInstance()->isFileExist(fullPath)){
+        
         CCLOG("%s: %s already loaded, skip", __PRETTY_FUNCTION__, url.c_str());
         return false;
     }
     
     std::string iden = fullPath;
-    auto ite = std::find(_loadersIdentifier.begin(), _loadersIdentifier.end(), iden);
+    ImageLoadInfo loadInfo = {fullPath,cacheDuration};
+    
+    
+    auto ite = std::find_if(_loadersIdentifier.begin(), _loadersIdentifier.end(), [loadInfo](const ImageLoadInfo& m) -> bool {
+        return loadInfo.url.compare(m.url) == 0;
+    });
     if(ite != _loadersIdentifier.end()){
         //downloading...skip
         return false;
@@ -230,7 +276,7 @@ bool LazyImageLoader::loadImage(const std::string &url)
     
     createDirectoryForPath(filePath);
     
-    _loadersIdentifier.push_back(iden);
+    _loadersIdentifier.push_back(loadInfo);
     
     _downloader->createDownloadFileTask(url, fullPath, iden);
     
@@ -265,8 +311,17 @@ void LazyImageLoader::onDownloadTaskDone(const cocos2d::network::DownloadTask &t
     
     //remove out of queue
     do{
-        auto ite = std::find(_loadersIdentifier.begin(), _loadersIdentifier.end(), task.identifier);
+        auto identifier = task.identifier;
+        
+        auto ite = std::find_if(_loadersIdentifier.begin(), _loadersIdentifier.end(), [identifier](const ImageLoadInfo& m) -> bool {
+            return identifier.compare(m.url) == 0;
+        });
+        
         if(ite != _loadersIdentifier.end()){
+            
+            //save cache info
+            saveCacheInfo(task.requestURL,ite->cacheDuration);
+            
             _loadersIdentifier.erase(ite);
         }else{
             break;
@@ -283,7 +338,13 @@ void LazyImageLoader::onDownloadTaskFailed(const cocos2d::network::DownloadTask 
           task.requestURL.c_str(), errorCode, errorCodeInternal, errorStr.c_str());
     
     //remove out of queue
-    auto ite = std::find(_loadersIdentifier.begin(), _loadersIdentifier.end(), task.identifier);
+    
+    auto identifier = task.identifier;
+    
+    auto ite = std::find_if(_loadersIdentifier.begin(), _loadersIdentifier.end(), [identifier](const ImageLoadInfo& m) -> bool {
+        return identifier.compare(m.url)==0;
+    });
+    
     if(ite != _loadersIdentifier.end()){
         _loadersIdentifier.erase(ite);
     }
